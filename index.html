@@ -26,7 +26,7 @@ body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--
 input,select{font-family:inherit;font-size:14px;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);transition:border-color .15s;width:100%}
 input:focus,select:focus{outline:none;border-color:var(--gold);background:#fff}
 .cw{position:relative}
-.dd{position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--gold);border-top:none;border-radius:0 0 8px 8px;max-height:180px;overflow-y:scroll;-webkit-overflow-scrolling:touch;z-index:999;display:none;box-shadow:var(--shl)}
+.dd{position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid var(--gold);border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:scroll;-webkit-overflow-scrolling:touch;z-index:999;display:none;box-shadow:var(--shl)}
 .dd.open{display:block}
 .di{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border)}.di:last-child{border-bottom:none}.di:hover{background:#fffbe8}.di.nt{color:var(--success);font-weight:700;font-size:12px}.di strong{background:#fff3b0;border-radius:2px}.di strong{color:var(--ink);background:#fff3b0;border-radius:2px}
 .ph{display:grid;grid-template-columns:2.8fr 58px 108px 80px 95px 32px;gap:5px;padding:9px 10px;background:var(--ink);color:var(--gold);font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:8px 8px 0 0}
@@ -103,6 +103,10 @@ input:focus,select:focus{outline:none;border-color:var(--gold);background:#fff}
           <input type="text" id="cinp" placeholder="Type or choose company…" autocomplete="off"
             oninput="fcCombo()" onfocus="fcCombo()" onblur="ccCombo(300)">
           <div class="dd" id="cdd"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+          <button class="btn" onclick="saveCompany()" style="background:#e8f5e9;color:#2e7d32;border:1.5px solid #a5d6a7;font-size:12px;padding:5px 12px;border-radius:6px;font-weight:700">＋ Save Company</button>
+          <span id="co-save-hint" style="font-size:11px;color:var(--muted)">Saves for future use</span>
         </div>
       </div>
     </div>
@@ -258,6 +262,21 @@ function buildSenderSelect(){
 }
 
 // ── COMBOS ─────────────────────────────────────────────────────────────────
+function saveCompany(){
+  const val=document.getElementById('cinp').value.trim();
+  if(!val){toast('Please enter a company name first');return;}
+  if(cos.includes(val)){
+    document.getElementById('co-save-hint').textContent='Already saved ✓';
+    setTimeout(()=>document.getElementById('co-save-hint').textContent='Saves for future use',2000);
+    return;
+  }
+  cos.push(val);
+  sl(K.co,cos);
+  renderManage();
+  document.getElementById('co-save-hint').textContent='Saved ✓';
+  setTimeout(()=>document.getElementById('co-save-hint').textContent='Saves for future use',2000);
+  toast(`"${val}" saved ✓`);
+}
 function fcCombo(){
   const inp=document.getElementById('cinp'),dd=document.getElementById('cdd');
   const v=inp.value.toLowerCase().trim();
@@ -921,11 +940,33 @@ function downloadPDF(){
       const quotImg=renderTextAsImage(quotNum,'700 18px Montserrat, Helvetica, sans-serif','#1a1a2e');
       const bytes=PDF.build({date,contact,company,sender,rows,quotNum,terms,brandImg,dateImg,quotImg});
       const blob=new Blob([bytes],{type:'application/pdf'});
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement('a');a.href=url;
-      a.download=`Quotation_${quotNum.replace(/\//g,'_')}_${company.replace(/[^a-zA-Z0-9]/g,'_').substring(0,18)}.pdf`;
-      document.body.appendChild(a);a.click();
-      setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},1000);
+      const filename=`Quotation_${quotNum.replace(/\//g,'_')}_${company.replace(/[^a-zA-Z0-9]/g,'_').substring(0,18)}.pdf`;
+      // iOS Safari doesn't support blob URL downloads — use base64 data URL + window.open
+      const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
+      const isSafari=/^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      if(isIOS || isSafari){
+        // Convert bytes to base64
+        let binary='';
+        const chunk=8192;
+        for(let i=0;i<bytes.length;i+=chunk){
+          binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
+        }
+        const b64=btoa(binary);
+        const dataUrl='data:application/pdf;base64,'+b64;
+        // Open in new tab — iOS will show PDF inline with share/save option
+        const w=window.open(dataUrl,'_blank');
+        if(!w){
+          // Popup blocked — fallback: create link and click
+          const a=document.createElement('a');a.href=dataUrl;a.download=filename;
+          document.body.appendChild(a);a.click();a.remove();
+        }
+      } else {
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');a.href=url;
+        a.download=filename;
+        document.body.appendChild(a);a.click();
+        setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},1000);
+      }
 
       const gt=rows.reduce((s,r)=>s+r.total*r.qty,0);
       hist.unshift({id:Date.now(),quotNum,date,contact,company,sender,rows,terms,grandTotal:gt,createdAt:new Date().toISOString()});
@@ -961,11 +1002,20 @@ function redown(id){
     const quotImg=renderTextAsImage(h.quotNum,'700 18px Montserrat, Helvetica, sans-serif','#1a1a2e');
     const bytes=PDF.build({date:h.date,contact:h.contact,company:h.company,sender:h.sender||senders[0],rows:h.rows,quotNum:h.quotNum,terms,brandImg,dateImg,quotImg});
     const blob=new Blob([bytes],{type:'application/pdf'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;
-    a.download=`Quotation_${h.quotNum.replace(/\//g,'_')}.pdf`;
-    document.body.appendChild(a);a.click();
-    setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},1000);
+    const filename=`Quotation_${h.quotNum.replace(/\//g,'_')}.pdf`;
+    const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
+    const isSafari=/^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    if(isIOS||isSafari){
+      let binary='';const chunk=8192;
+      for(let i=0;i<bytes.length;i+=chunk){binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));}
+      const w=window.open('data:application/pdf;base64,'+btoa(binary),'_blank');
+      if(!w){const a=document.createElement('a');a.href='data:application/pdf;base64,'+btoa(binary);a.download=filename;document.body.appendChild(a);a.click();a.remove();}
+    } else {
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download=filename;
+      document.body.appendChild(a);a.click();
+      setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},1000);
+    }
     toast('PDF re-downloaded ✓');
   }catch(e){toast('Error: '+e.message)}
 }
