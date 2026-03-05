@@ -224,6 +224,15 @@ let fy=gl(K.yr)??'26-27';
 let hist=gl(K.hi)??[];
 
 // ── UTILS ──────────────────────────────────────────────────────────────────
+function showIOSDownload(b64,filename){
+  const ex=document.getElementById('ios-dl-overlay');if(ex)ex.remove();
+  const overlay=document.createElement('div');
+  overlay.id='ios-dl-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML=`<div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:320px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3)"><div style="font-size:40px;margin-bottom:12px">📄</div><div style="font-weight:700;font-size:16px;color:#1a1a2e;margin-bottom:6px">PDF Ready!</div><div style="font-size:13px;color:#888;margin-bottom:20px;line-height:1.5">Tap <b>Open PDF</b> below, then tap the <b>Share ↑</b> button → <b>Save to Files</b></div><a href="data:application/pdf;base64,${b64}" download="${filename}" target="_blank" style="display:block;background:#1a1a2e;color:#F5C518;font-weight:700;font-size:15px;padding:13px;border-radius:10px;text-decoration:none;margin-bottom:10px" onclick="setTimeout(()=>{const o=document.getElementById('ios-dl-overlay');if(o)o.remove();},500)">⬇ Open PDF</a><button onclick="document.getElementById('ios-dl-overlay').remove()" style="background:none;border:1.5px solid #ddd;color:#888;font-size:13px;padding:9px 20px;border-radius:8px;cursor:pointer;width:100%">Close</button></div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600)}
 function qn(){return`ITZ/${fy}/${String(ctr).padStart(3,'0')}`}
 function uqd(){document.getElementById('qnd').textContent=qn()}
@@ -390,7 +399,7 @@ function collectRows(){
 // ══════════════════════════════════════════════════════════════════════════
 const PDF={
   // Approx char width for Helvetica (units per pt, averaged)
-  SW(s,sz){return String(s).length*sz*0.52},
+  SW(s,sz){return String(s).length*sz*0.56},
   WS(sz){return sz*0.52},
 
   wrapText(txt,sz,maxW){
@@ -564,7 +573,7 @@ const PDF={
 
     // Pre-calc row heights
     const rowHeights=data.rows.map(row=>{
-      const dl=this.wrapText(row.desc,9,cols[0].w-22);
+      const dl=this.wrapText(row.desc,9,cols[0].w-36);
       return Math.max(minRowH, dl.length*lineH+padV*2);
     });
 
@@ -585,7 +594,7 @@ const PDF={
       LINE(ML,cy+rH,ML+CW,cy+rH, 205,207,215, 0.4);
 
       let cx=ML;
-      const dlines=this.wrapText(row.desc,9,cols[0].w-22);
+      const dlines=this.wrapText(row.desc,9,cols[0].w-36);
       const dStartY=cy+padV+lineH*0.8;
       T(cx+6,dStartY,String(ri+1)+'.',1,8, 170,170,175);
       dlines.forEach((l,li)=>T(cx+20,dStartY+li*lineH,l,1,9));
@@ -943,14 +952,14 @@ function downloadPDF(){
       const filename=`Quotation_${quotNum.replace(/\//g,'_')}_${company.replace(/[^a-zA-Z0-9]/g,'_').substring(0,18)}.pdf`;
       const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
       if(isIOS){
-        // iOS Safari: open blob URL in same tab using a temporary object URL
-        const url=URL.createObjectURL(blob);
-        window.location.href=url;
-        setTimeout(()=>URL.revokeObjectURL(url),5000);
+        // iOS: convert to base64 and show download overlay with open button
+        let binary='';
+        for(let i=0;i<bytes.length;i+=4096)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+4096,bytes.length)));
+        const b64=btoa(binary);
+        showIOSDownload(b64, filename);
       } else {
         const url=URL.createObjectURL(blob);
-        const a=document.createElement('a');a.href=url;
-        a.download=filename;
+        const a=document.createElement('a');a.href=url;a.download=filename;
         document.body.appendChild(a);a.click();
         setTimeout(()=>{URL.revokeObjectURL(url);a.remove()},1000);
       }
@@ -992,9 +1001,10 @@ function redown(id){
     const filename=`Quotation_${h.quotNum.replace(/\//g,'_')}.pdf`;
     const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
     if(isIOS){
-      const url=URL.createObjectURL(blob);
-      window.location.href=url;
-      setTimeout(()=>URL.revokeObjectURL(url),5000);
+      let binary='';
+      for(let i=0;i<bytes.length;i+=4096)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+4096,bytes.length)));
+      const b64=btoa(binary);
+      showIOSDownload(b64, filename);
     } else {
       const url=URL.createObjectURL(blob);
       const a=document.createElement('a');a.href=url;a.download=filename;
